@@ -1,211 +1,158 @@
-# 🎵 Music Recommender Simulation
+# Explainable AI Music Recommender
 
 ## Project Summary
 
-In this project you will build and explain a small music recommender system.
+This project evolved from a basic weighted **Music Recommender Simulation** into an **Explainable AI Music Recommender** that uses Retrieval-Augmented Generation (RAG). The original simulation scored songs with a simple weighted formula. This version separates that process into two explicit steps. First *retrieve* the most relevant songs from the dataset, then *score and explain* them using only the retrieved data, making the system more transparent and its reasoning easier to understand.
 
-Your goal is to:
-
-- Represent songs and a user "taste profile" as data
-- Design a scoring rule that turns that data into recommendations
-- Evaluate what your system gets right and wrong
-- Reflect on how this mirrors real world AI recommenders
-
-Replace this paragraph with your own summary of what your version does.
+The system takes a user's **genre**, **mood**, and **energy level** as input, retrieves matching candidates from `data/songs.csv`, and returns the top 3 songs with a confidence score and a plain-language explanation grounded in each song's attributes.
 
 ---
 
-## How The System Works
+## System Architecture
 
-Explain your design in plain language.
+![Architecture Diagram](assets/architecture.png)
 
-Some prompts to answer:
-
-- What features does each `Song` use in your system
-  - For example: genre, mood, energy, tempo
-- What information does your `UserProfile` store
-- How does your `Recommender` compute a score for each song
-- How do you choose which songs to recommend
-
-You can include a simple diagram or bullet list if helpful.
+| Step | Description |
+|------|-------------|
+| **Input** | User provides genre, mood, and energy (0.0–1.0) |
+| **Validation** | Checks genre/mood against allowed values; energy range check |
+| **Retrieval (RAG)** | `src/retrieval.py` fetches candidates: exact matches first, then partial, then fallback |
+| **Scoring** | Genre match (+2.0), mood match (+1.5), energy proximity (+1.0 scaled) |
+| **Explanation** | Generated from the retrieved song's actual genre, mood, energy, and description |
+| **Output** | Top 3 songs with score, confidence label (High/Medium/Low), and explanation |
+| **Testing & Logging** | `src/evaluation.py` runs 6 tests; all runs logged to `recommender.log` |
 
 ---
 
-## Getting Started
-
-### Setup
-
-1. Create a virtual environment (optional but recommended):
-
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate      # Mac or Linux
-   .venv\Scripts\activate         # Windows
-
-2. Install dependencies
+## Setup
 
 ```bash
+# 1. (Optional) create a virtual environment
+python -m venv .venv
+source .venv/bin/activate      # Mac/Linux
+.venv\Scripts\activate         # Windows
+
+# 2. Install dependencies
 pip install -r requirements.txt
+
+# 3. Run the app
+python app.py
 ```
 
-3. Run the app:
-
-```bash
-python -m src.main
-```
-
-### Running Tests
-
-Run the starter tests with:
+### Run tests
 
 ```bash
 pytest
 ```
 
-You can add more tests in `tests/test_recommender.py`.
+### Run evaluation
+
+```bash
+python src/evaluation.py
+```
 
 ---
 
-## Experiments You Tried
+## Sample Inputs and Outputs
 
-Use this section to document the experiments you ran. For example:
+**Example 1 — Pop / Happy / High Energy**
+```
+Enter genre  : pop
+Enter mood   : happy
+Enter energy : 0.8
 
-- What happened when you changed the weight on genre from 2.0 to 0.5
-- What happened when you added tempo or valence to the score
-- How did your system behave for different types of users
+Top 3 Recommendations:
+
+1. Sunrise City by Neon Echo
+   Score: 4.48 [High confidence]
+   Because: matches your genre (pop); fits your mood (happy); has similar energy (0.82); Upbeat pop anthem with bright synths...
+
+2. Rooftop Lights by Indigo Parade
+   Score: 2.74 [Medium confidence]
+   Because: fits your mood (happy); has similar energy (0.76); Indie pop gem with jangly guitars...
+
+3. Gym Hero by Max Pulse
+   Score: 2.57 [Medium confidence]
+   Because: matches your genre (pop); Gym Hero is a hard-hitting pop banger...
+```
+
+**Example 2 — Lofi / Chill / Low Energy**
+```
+Enter genre  : lofi
+Enter mood   : chill
+Enter energy : 0.4
+
+1. Midnight Coding by LoRoom      Score: 4.48 [High]
+2. Library Rain by Paper Lanterns Score: 4.30 [High]
+3. Spacewalk Thoughts by Orbit B. Score: 2.62 [Medium]
+```
+
+**Example 3 — Fallback (no exact match)**
+```
+Enter genre  : synthwave
+Enter mood   : relaxed
+Enter energy : 0.6
+
+Retrieved 6 candidate(s) matching genre/mood...
+
+1. Night Drive Loop by Neon Echo   Score: 2.85 [Medium]
+   Because: matches your genre (synthwave); Nostalgic synthwave with pulsing basslines...
+```
+
+---
+
+## Design Decisions and Trade-offs
+
+| Decision | Reason | Trade-off |
+|----------|--------|-----------|
+| RAG over pure scoring | Explanations are grounded in real song data, not generated freely | Requires good descriptions in the dataset |
+| Simple weighted score | Transparent and easy to audit | Cannot capture subtle taste patterns |
+| Fallback to partial matches | System always returns *something* useful | Lower-confidence results when no exact match |
+| Confidence labels (High/Medium/Low) | Users can calibrate how much to trust a result | Thresholds are hand-tuned, not learned |
+
+---
+
+## Testing Summary
+
+Six automated tests cover normal use (pop, lofi, rock, jazz, ambient) and one fallback case (synthwave + relaxed, which has no exact match in the dataset).
+
+```
+6/6 tests passed, all cases handled correctly
+```
+
+The fallback test returned a Medium-confidence result rather than nothing, the system degrades gracefully rather than failing.
 
 ---
 
 ## Limitations and Risks
 
-Summarize some limitations of your recommender.
+- **Tiny dataset (10 songs):** The catalog is too small to represent real musical diversity. Gaps in genre/mood coverage are common.
+- **No lyric or audio understanding:** Scores depend entirely on hand-labelled attributes. Two songs with the same genre/mood/energy labels are treated as identical.
+- **Attribute bias:** Genres with more catalog entries will appear in recommendations more often, even when they are not the best match.
+- **Overtrusting recommendations:** A "High confidence" label can mislead users into thinking the system deeply understands their taste. It only means the song attributes matched well, not that the user will enjoy it.
 
-Examples:
+---
 
-- It only works on a tiny catalog
-- It does not understand lyrics or language
-- It might over favor one genre or mood
+## Responsible AI Reflection
 
-You will go deeper on this in your model card.
+**Limitations:** This system reflects whatever biases exist in how songs were labelled. A labeller who finds "lofi" synonymous with "studying music" will create a dataset that steers all study-mood queries toward lofi, regardless of whether a jazz or ambient track would serve the user better.
+
+**Possible misuse:** Recommenders can create filter bubbles. A system that always returns the same genre because it scores highest will reduce exposure to new styles, the opposite of discovery. In a real product this could be harmful at scale.
+
+**Testing surprise:** The evaluation revealed that data quality matters more than algorithm complexity. When the dataset had good genre/mood coverage, even the simple weighted scorer produced High-confidence results. When coverage was missing (synthwave + relaxed), no amount of scoring logic could compensate.
+
+**AI collaboration:**
+- *Helpful suggestion:* Claude suggested separating retrieval from scoring as two distinct steps, which made the RAG behavior explicit and the explanation logic much cleaner.
+- *Overly complex suggestion:* An early suggestion added cosine similarity over all numeric attributes (tempo, valence, danceability, acousticness). This made scores harder to interpret and did not meaningfully improve results on a 10 song dataset, a premature optimization.
 
 ---
 
 ## Reflection
 
-Read and complete `model_card.md`:
+Building this recommender made the mechanics of real systems like Spotify's "Discover Weekly" concrete. What looks like magic is just a scoring function over labelled attributes, and the labels are the real work. The biggest lesson was that bias enters early, at the data-labelling stage, long before any algorithm runs. A system that seems "smart" can be confidently wrong if its training data reflects only a narrow slice of musical taste.
+
+Human judgment still matters in deciding what attributes to capture, how to label them, and what "good" looks like, none of that is automatic.
+
+---
 
 [**Model Card**](model_card.md)
-
-Write 1 to 2 paragraphs here about what you learned:
-
-- about how recommenders turn data into predictions
-- about where bias or unfairness could show up in systems like this
-
-
----
-
-## 7. `model_card_template.md`
-
-Combines reflection and model card framing from the Module 3 guidance. :contentReference[oaicite:2]{index=2}  
-
-```markdown
-# 🎧 Model Card - Music Recommender Simulation
-
-## 1. Model Name
-
-Give your recommender a name, for example:
-
-> VibeFinder 1.0
-
----
-
-## 2. Intended Use
-
-- What is this system trying to do
-- Who is it for
-
-Example:
-
-> This model suggests 3 to 5 songs from a small catalog based on a user's preferred genre, mood, and energy level. It is for classroom exploration only, not for real users.
-
----
-
-## 3. How It Works (Short Explanation)
-
-Describe your scoring logic in plain language.
-
-- What features of each song does it consider
-- What information about the user does it use
-- How does it turn those into a number
-
-Try to avoid code in this section, treat it like an explanation to a non programmer.
-
----
-
-## 4. Data
-
-Describe your dataset.
-
-- How many songs are in `data/songs.csv`
-- Did you add or remove any songs
-- What kinds of genres or moods are represented
-- Whose taste does this data mostly reflect
-
----
-
-## 5. Strengths
-
-Where does your recommender work well
-
-You can think about:
-- Situations where the top results "felt right"
-- Particular user profiles it served well
-- Simplicity or transparency benefits
-
----
-
-## 6. Limitations and Bias
-
-Where does your recommender struggle
-
-Some prompts:
-- Does it ignore some genres or moods
-- Does it treat all users as if they have the same taste shape
-- Is it biased toward high energy or one genre by default
-- How could this be unfair if used in a real product
-
----
-
-## 7. Evaluation
-
-How did you check your system
-
-Examples:
-- You tried multiple user profiles and wrote down whether the results matched your expectations
-- You compared your simulation to what a real app like Spotify or YouTube tends to recommend
-- You wrote tests for your scoring logic
-
-You do not need a numeric metric, but if you used one, explain what it measures.
-
----
-
-## 8. Future Work
-
-If you had more time, how would you improve this recommender
-
-Examples:
-
-- Add support for multiple users and "group vibe" recommendations
-- Balance diversity of songs instead of always picking the closest match
-- Use more features, like tempo ranges or lyric themes
-
----
-
-## 9. Personal Reflection
-
-A few sentences about what you learned:
-
-- What surprised you about how your system behaved
-- How did building this change how you think about real music recommenders
-- Where do you think human judgment still matters, even if the model seems "smart"
-
